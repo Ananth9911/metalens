@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MetaLens — data lineage, impact & AI catalog</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="app">
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark">◆</span>
+      <span class="brand-name">MetaLens</span>
+      <span class="brand-sub">lineage · impact · AI catalog</span>
+    </div>
+    <nav class="tabs">
+      <button class="tab active" data-tab="graph">Graph</button>
+      <button class="tab" data-tab="ask">Ask</button>
+      <button class="tab" data-tab="extract">Extract from SQL</button>
+    </nav>
+    <div class="topbar-right" id="pills"></div>
+  </header>
+
+  <!-- GRAPH TAB (MetaLens core) -->
+  <div class="workspace view active" id="view-graph">
+    <aside class="panel catalog">
+      <div class="panel-head">
+        <h2>Catalog</h2>
+        <input id="search" class="search" type="search" placeholder="filter datasets…" autocomplete="off">
+      </div>
+      <div class="layer-filter" id="layer-filter"></div>
+      <div class="dataset-list" id="dataset-list"></div>
+    </aside>
+
+    <main class="panel canvas-panel">
+      <div class="canvas-head">
+        <div class="canvas-title" id="canvas-title">Full pipeline</div>
+        <div class="canvas-actions">
+          <button class="btn" id="btn-overview">Overview</button>
+          <button class="btn" id="btn-buildorder">Build order</button>
+          <span class="legend" id="legend"></span>
+        </div>
+      </div>
+      <div id="graph" class="graph"></div>
+      <div class="canvas-foot" id="canvas-foot"></div>
+    </main>
+
+    <aside class="panel inspector">
+      <div class="empty-inspector" id="inspector-empty">
+        <p class="empty-lead">Select a dataset</p>
+        <p class="empty-sub">Pick a table on the left or a node in the graph to see its metadata, columns, and blast radius. Or ask a question in the Ask tab.</p>
+      </div>
+      <div id="inspector-body" hidden></div>
+    </aside>
+  </div>
+
+  <!-- ASK TAB (RAG) -->
+  <div class="view ask-view" id="view-ask">
+    <div class="ask-scroll" id="ask-log">
+      <div class="hint-card">
+        <p class="hint-title">Ask about the warehouse in plain English.</p>
+        <p class="hint-body">Answers are grounded only in this catalog — retrieved datasets are cited, and impact questions use the real lineage graph from the Graph tab.</p>
+        <div class="samples" id="samples"></div>
+      </div>
+    </div>
+    <div class="ask-bar">
+      <input id="ask-input" type="text" placeholder="e.g. what breaks if I change staging.stg_orders?" autocomplete="off">
+      <button id="ask-send" class="send">Ask</button>
+    </div>
+  </div>
+
+  <!-- EXTRACT TAB (SQL -> lineage) -->
+  <div class="view extract-view" id="view-extract">
+    <div class="extract-grid">
+      <div class="extract-in">
+        <label class="fld-label">SQL — a CREATE TABLE / SELECT that builds a table</label>
+        <textarea id="sql-input" spellcheck="false"></textarea>
+        <div class="extract-actions">
+          <label class="chk"><input type="checkbox" id="sql-add"> add result to the catalog &amp; graph</label>
+          <button id="sql-run" class="send">Extract lineage</button>
+        </div>
+      </div>
+      <div class="extract-out" id="extract-out">
+        <div class="hint-card">
+          <p class="hint-title">Column-level lineage, inferred by the model.</p>
+          <p class="hint-body">The model reads your SQL and returns which source columns feed each output column. Invented references not in the known catalog are flagged and dropped. Check "add to catalog" to insert the new table into the graph — then switch to the Graph tab to see it.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<script src="app.js"></script>
+</body>
+</html>

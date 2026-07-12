@@ -1,0 +1,162 @@
+# MetaLens sample catalog
+# A small but realistic analytics warehouse: raw ingestion -> staging ->
+# marts -> reporting. Edges are declared per-dataset under `sources`.
+# Column-level lineage is declared per-column under `derived_from`.
+
+datasets:
+
+  # ---------------- RAW LAYER (ingested, untouched) ----------------
+  - id: raw.events_clickstream
+    name: Clickstream Events
+    layer: raw
+    owner: data-platform
+    description: Raw web/app events landed hourly from the event collector.
+    tags: [events, hourly, pii-review]
+    sources: []
+    columns:
+      - {name: event_id, type: string, description: Unique event identifier}
+      - {name: user_id, type: string, description: Pseudonymous user id}
+      - {name: event_type, type: string, description: e.g. page_view, click}
+      - {name: ts, type: timestamp, description: Event time (UTC)}
+
+  - id: raw.orders
+    name: Orders (source system)
+    layer: raw
+    owner: data-platform
+    description: Order records replicated from the transactional DB.
+    tags: [orders, cdc]
+    sources: []
+    columns:
+      - {name: order_id, type: string}
+      - {name: user_id, type: string}
+      - {name: amount, type: decimal}
+      - {name: status, type: string}
+      - {name: created_at, type: timestamp}
+
+  - id: raw.users
+    name: Users (source system)
+    layer: raw
+    owner: data-platform
+    description: User dimension replicated from the identity service.
+    tags: [users, pii]
+    sources: []
+    columns:
+      - {name: user_id, type: string}
+      - {name: signup_date, type: date}
+      - {name: country, type: string}
+      - {name: email_hash, type: string, description: Hashed email (PII-safe)}
+
+  # ---------------- STAGING LAYER (cleaned, typed) ----------------
+  - id: staging.stg_events
+    name: Staged Events
+    layer: staging
+    owner: analytics-eng
+    description: Deduplicated, typed clickstream events.
+    tags: [events]
+    sources: [raw.events_clickstream]
+    columns:
+      - {name: event_id, type: string, derived_from: [raw.events_clickstream.event_id]}
+      - {name: user_id, type: string, derived_from: [raw.events_clickstream.user_id]}
+      - {name: event_type, type: string, derived_from: [raw.events_clickstream.event_type]}
+      - {name: event_date, type: date, description: Truncated from ts, derived_from: [raw.events_clickstream.ts]}
+
+  - id: staging.stg_orders
+    name: Staged Orders
+    layer: staging
+    owner: analytics-eng
+    description: Valid, completed orders with cleaned amounts.
+    tags: [orders]
+    sources: [raw.orders]
+    columns:
+      - {name: order_id, type: string, derived_from: [raw.orders.order_id]}
+      - {name: user_id, type: string, derived_from: [raw.orders.user_id]}
+      - {name: amount, type: decimal, derived_from: [raw.orders.amount]}
+      - {name: order_date, type: date, derived_from: [raw.orders.created_at]}
+
+  - id: staging.stg_users
+    name: Staged Users
+    layer: staging
+    owner: analytics-eng
+    description: Users with normalised country codes.
+    tags: [users, pii]
+    sources: [raw.users]
+    columns:
+      - {name: user_id, type: string, derived_from: [raw.users.user_id]}
+      - {name: signup_date, type: date, derived_from: [raw.users.signup_date]}
+      - {name: country, type: string, derived_from: [raw.users.country]}
+
+  # ---------------- MART LAYER (business logic) ----------------
+  - id: mart.dim_users
+    name: User Dimension
+    layer: mart
+    owner: analytics-eng
+    description: Conformed user dimension used across all marts.
+    tags: [dimension, users]
+    sources: [staging.stg_users]
+    columns:
+      - {name: user_id, type: string, derived_from: [staging.stg_users.user_id]}
+      - {name: signup_date, type: date, derived_from: [staging.stg_users.signup_date]}
+      - {name: country, type: string, derived_from: [staging.stg_users.country]}
+
+  - id: mart.fct_orders
+    name: Orders Fact
+    layer: mart
+    owner: analytics-eng
+    description: Order facts enriched with user attributes.
+    tags: [fact, orders, revenue]
+    sources: [staging.stg_orders, mart.dim_users]
+    columns:
+      - {name: order_id, type: string, derived_from: [staging.stg_orders.order_id]}
+      - {name: user_id, type: string, derived_from: [staging.stg_orders.user_id]}
+      - {name: amount, type: decimal, derived_from: [staging.stg_orders.amount]}
+      - {name: country, type: string, derived_from: [mart.dim_users.country]}
+      - {name: order_date, type: date, derived_from: [staging.stg_orders.order_date]}
+
+  - id: mart.fct_activity
+    name: Activity Fact
+    layer: mart
+    owner: analytics-eng
+    description: Daily user activity from staged events.
+    tags: [fact, engagement]
+    sources: [staging.stg_events, mart.dim_users]
+    columns:
+      - {name: user_id, type: string, derived_from: [staging.stg_events.user_id]}
+      - {name: event_date, type: date, derived_from: [staging.stg_events.event_date]}
+      - {name: event_count, type: integer, description: Count of events per user-day, derived_from: [staging.stg_events.event_id]}
+      - {name: country, type: string, derived_from: [mart.dim_users.country]}
+
+  # ---------------- REPORT LAYER (dashboards) ----------------
+  - id: report.daily_active_users
+    name: Daily Active Users
+    layer: report
+    owner: bi-team
+    description: DAU trend powering the executive dashboard.
+    tags: [dashboard, engagement, exec]
+    sources: [mart.fct_activity]
+    columns:
+      - {name: event_date, type: date, derived_from: [mart.fct_activity.event_date]}
+      - {name: country, type: string, derived_from: [mart.fct_activity.country]}
+      - {name: dau, type: integer, description: Distinct active users, derived_from: [mart.fct_activity.user_id]}
+
+  - id: report.revenue_by_country
+    name: Revenue by Country
+    layer: report
+    owner: bi-team
+    description: Monthly revenue split by country for finance.
+    tags: [dashboard, revenue, finance, exec]
+    sources: [mart.fct_orders]
+    columns:
+      - {name: month, type: date, derived_from: [mart.fct_orders.order_date]}
+      - {name: country, type: string, derived_from: [mart.fct_orders.country]}
+      - {name: revenue, type: decimal, description: Sum of order amounts, derived_from: [mart.fct_orders.amount]}
+
+  - id: report.exec_summary
+    name: Executive Summary
+    layer: report
+    owner: bi-team
+    description: Combined KPI tile board for leadership.
+    tags: [dashboard, exec]
+    sources: [report.daily_active_users, report.revenue_by_country]
+    columns:
+      - {name: metric, type: string}
+      - {name: value, type: decimal}

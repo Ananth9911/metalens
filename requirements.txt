@@ -1,0 +1,12 @@
+fastapi>=0.110
+uvicorn[standard]>=0.29
+pyyaml>=6.0
+groq>=1.0
+numpy>=1.24
+python-dotenv>=1.0
+pydantic>=2.0
+# Neural embeddings. Installed CPU-only torch to keep the image small and the
+# build fast enough for App Service (the default torch wheel pulls ~2GB of CUDA).
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch>=2.2
+sentence-transformers>=2.2
