@@ -3,6 +3,9 @@ __pycache__/
 *.pyo
 *.pyd
 
+password
+.env
+
 .env
 .env.*
 
